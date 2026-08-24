@@ -1,0 +1,21 @@
+[project]
+name = "tinydelta"
+version = "0.1.0"
+description = "A single-node table format with an atomic JSON log, time travel, and optimistic concurrency."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+tinydelta = "tinydelta.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
