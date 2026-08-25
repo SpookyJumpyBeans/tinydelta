@@ -72,3 +72,26 @@ def test_schema_mismatch_does_not_commit(tmp_path: Path) -> None:
 def test_missing_table(tmp_path: Path) -> None:
     with pytest.raises(TinyDeltaError, match="not a tinydelta table"):
         DeltaTable.open(tmp_path / "nope")
+
+
+def test_vacuum_deletes_orphans_not_history(tmp_path: Path) -> None:
+    table = _create(tmp_path)
+    table.append([{"id": 1, "region": "west", "year": 2024}])
+    table.overwrite([{"id": 9, "region": "north", "year": 2025}])
+    orphan = table.path / "part-orphan.jsonl"
+    orphan.write_text('{"id":99,"region":"ghost","year":1999}\n', encoding="utf-8")
+
+    deleted = table.vacuum()
+    assert deleted == ["part-orphan.jsonl"]
+    assert not orphan.exists()
+    assert table.read() == [{"id": 9, "region": "north", "year": 2025}]
+    assert table.read(version=1) == [{"id": 1, "region": "west", "year": 2024}]
+
+
+def test_vacuum_respects_retention(tmp_path: Path) -> None:
+    table = _create(tmp_path)
+    orphan = table.path / "part-orphan.jsonl"
+    orphan.write_text('{"id":99,"region":"ghost","year":1999}\n', encoding="utf-8")
+    assert table.vacuum(older_than_ms=60_000) == []
+    assert orphan.exists()
+    assert table.vacuum(older_than_ms=0) == ["part-orphan.jsonl"]

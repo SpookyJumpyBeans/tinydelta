@@ -10,6 +10,7 @@ from tinydelta.log import (
     AddFile,
     Commit,
     Snapshot,
+    all_added_paths,
     load_history,
     load_snapshot,
     log_dir,
@@ -89,6 +90,29 @@ class DeltaTable:
 
     def history(self) -> list[Commit]:
         return load_history(self.log_dir)
+
+    def vacuum(self, *, older_than_ms: int = 0) -> list[str]:
+        """Delete data files the log never published.
+
+        Files that appear in any `add` action are kept, even after overwrite,
+        so `read(version=k)` still works. In-flight writes (data file on disk,
+        commit not created yet) look like orphans; pass older_than_ms if another
+        writer may still be committing.
+        """
+        if older_than_ms < 0:
+            raise TinyDeltaError("older_than_ms must be >= 0")
+        referenced = all_added_paths(self.log_dir)
+        now_ms = time.time() * 1000
+        deleted: list[str] = []
+        for path in sorted(self.path.glob("part-*.jsonl")):
+            if path.name in referenced:
+                continue
+            age_ms = now_ms - path.stat().st_mtime * 1000
+            if age_ms < older_than_ms:
+                continue
+            path.unlink()
+            deleted.append(path.name)
+        return deleted
 
     def _base_snapshot(self, read_version: int | None) -> Snapshot:
         latest = self.snapshot()

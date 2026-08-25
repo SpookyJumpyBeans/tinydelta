@@ -36,6 +36,16 @@ def main(argv: list[str] | None = None) -> int:
     history = sub.add_parser("history", help="print commits")
     history.add_argument("table")
 
+    vacuum = sub.add_parser("vacuum", help="delete unpublished data files")
+    vacuum.add_argument("table")
+    vacuum.add_argument(
+        "--older-than",
+        type=int,
+        default=0,
+        metavar="MS",
+        help="only delete orphans older than this many milliseconds",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -54,6 +64,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "read":
             for row in table.read(args.version):
                 print(json.dumps(row, separators=(",", ":")))
+            return 0
+        if args.command == "vacuum":
+            deleted = table.vacuum(older_than_ms=args.older_than)
+            if not deleted:
+                print("no orphan files")
+                return 0
+            print(f"deleted {len(deleted)} orphan file{'s' if len(deleted) != 1 else ''}")
+            for name in deleted:
+                print(name)
             return 0
         for commit in table.history():
             print(

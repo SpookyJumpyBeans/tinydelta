@@ -118,6 +118,19 @@ def load_snapshot(log_directory: Path, version: int | None = None) -> Snapshot:
     return Snapshot(version=target, schema=schema, files=tuple(files.values()), table_id=table_id)
 
 
+def all_added_paths(log_directory: Path) -> set[str]:
+    """Every data file ever published, including ones later removed.
+
+    Vacuum must not delete these: time travel still reads them.
+    """
+    paths: set[str] = set()
+    for version in list_versions(log_directory):
+        for action in read_actions(log_directory, version):
+            if "add" in action:
+                paths.add(action["add"]["path"])
+    return paths
+
+
 def load_history(log_directory: Path) -> list[Commit]:
     history: list[Commit] = []
     for version in list_versions(log_directory):
