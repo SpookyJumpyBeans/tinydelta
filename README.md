@@ -13,6 +13,7 @@ Sister of [tinyquery](https://github.com/SpookyJumpyBeans/tinyquery): that repo 
 - `read` the latest snapshot, or a past version
 - Optimistic concurrency: two writers that both read version *n* cannot both commit *n+1*
 - `vacuum` deletes data files the log never published (crash leftovers, lost writer files)
+- `restore` makes the latest snapshot match an older version, as a new commit
 
 ## What it does not do
 
@@ -27,6 +28,7 @@ python -m tinydelta read ./orders
 python -m tinydelta overwrite ./orders --file examples/orders.jsonl
 python -m tinydelta read ./orders --version 1
 python -m tinydelta history ./orders
+python -m tinydelta restore ./orders --version 1
 python -m tinydelta vacuum ./orders
 ```
 
@@ -51,6 +53,8 @@ A reader reconstructs a version by replaying `add` / `remove` from 0 to *n*. A J
 `overwrite` removes every file in the current snapshot and adds a new one. Version *n-1* still reads the old files; those files stay on disk.
 
 `vacuum` deletes `part-*.jsonl` that never appear in any `add` action. That is the crash leftover. It does not reclaim overwritten files, because time travel still needs them. A writer that has written JSONL but not yet created the commit file looks like an orphan; `--older-than` keeps recent files so a concurrent commit is not deleted out from under it.
+
+`restore --version k` commits remove/add so the *new* latest snapshot matches version *k*. It does not delete history; version *k+1* is still there if you ask for it.
 
 ## Example
 

@@ -91,6 +91,32 @@ class DeltaTable:
     def history(self) -> list[Commit]:
         return load_history(self.log_dir)
 
+    def restore(self, version: int, *, read_version: int | None = None) -> int:
+        """Make the latest snapshot match an older version, as a new commit.
+
+        Files are not copied. The log records remove/add so readers of the new
+        version see the same file set as `version`. Older versions stay readable.
+        """
+        target = self.snapshot(version)
+        base = self._base_snapshot(read_version)
+        target_paths = {file.path: file for file in target.files}
+        base_paths = {file.path: file for file in base.files}
+
+        actions: list[dict] = []
+        for path in base_paths:
+            if path not in target_paths:
+                actions.append({"remove": {"path": path}})
+        for path, file in target_paths.items():
+            if path not in base_paths:
+                actions.append({"add": _add_action(file)})
+
+        return self._commit(
+            version=base.version + 1,
+            read_version=base.version,
+            operation="RESTORE",
+            actions=actions,
+        )
+
     def vacuum(self, *, older_than_ms: int = 0) -> list[str]:
         """Delete data files the log never published.
 

@@ -95,3 +95,23 @@ def test_vacuum_respects_retention(tmp_path: Path) -> None:
     assert table.vacuum(older_than_ms=60_000) == []
     assert orphan.exists()
     assert table.vacuum(older_than_ms=0) == ["part-orphan.jsonl"]
+
+
+def test_restore_brings_back_old_snapshot(tmp_path: Path) -> None:
+    table = _create(tmp_path)
+    table.append([{"id": 1, "region": "west", "year": 2024}])
+    table.overwrite([{"id": 9, "region": "north", "year": 2025}])
+    assert table.read() == [{"id": 9, "region": "north", "year": 2025}]
+
+    version = table.restore(1)
+    assert version == 3
+    assert table.read() == [{"id": 1, "region": "west", "year": 2024}]
+    assert table.read(version=2) == [{"id": 9, "region": "north", "year": 2025}]
+    assert table.history()[-1].operation == "RESTORE"
+
+
+def test_restore_conflict(tmp_path: Path) -> None:
+    table = _create(tmp_path)
+    table.append([{"id": 1, "region": "west", "year": 2024}], read_version=0)
+    with pytest.raises(ConcurrentWriteError):
+        table.restore(0, read_version=0)

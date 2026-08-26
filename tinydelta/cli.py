@@ -36,6 +36,10 @@ def main(argv: list[str] | None = None) -> int:
     history = sub.add_parser("history", help="print commits")
     history.add_argument("table")
 
+    restore = sub.add_parser("restore", help="make latest match an older version")
+    restore.add_argument("table")
+    restore.add_argument("--version", type=int, required=True)
+
     vacuum = sub.add_parser("vacuum", help="delete unpublished data files")
     vacuum.add_argument("table")
     vacuum.add_argument(
@@ -64,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "read":
             for row in table.read(args.version):
                 print(json.dumps(row, separators=(",", ":")))
+            return 0
+        if args.command == "restore":
+            version = table.restore(args.version)
+            print(f"restored version {args.version} as version {version}")
             return 0
         if args.command == "vacuum":
             deleted = table.vacuum(older_than_ms=args.older_than)
