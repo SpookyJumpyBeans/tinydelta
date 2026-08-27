@@ -11,6 +11,7 @@ Sister of [tinyquery](https://github.com/SpookyJumpyBeans/tinyquery): that repo 
 - `create` an empty table with a schema
 - `append` / `overwrite` rows from JSONL
 - `read` the latest snapshot, or a past version
+- `describe` schema, file count, and row count for a version
 - Optimistic concurrency: two writers that both read version *n* cannot both commit *n+1*
 - `vacuum` deletes data files the log never published (crash leftovers, lost writer files)
 - `restore` makes the latest snapshot match an older version, as a new commit
@@ -25,6 +26,7 @@ No Parquet, no checkpoints, no MERGE, no cloud object store. There is no retry l
 python -m tinydelta create ./orders id:int region:str year:int
 python -m tinydelta append ./orders --file examples/orders.jsonl
 python -m tinydelta read ./orders
+python -m tinydelta describe ./orders
 python -m tinydelta overwrite ./orders --file examples/orders.jsonl
 python -m tinydelta read ./orders --version 1
 python -m tinydelta history ./orders
