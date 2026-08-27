@@ -115,3 +115,23 @@ def test_restore_conflict(tmp_path: Path) -> None:
     table.append([{"id": 1, "region": "west", "year": 2024}], read_version=0)
     with pytest.raises(ConcurrentWriteError):
         table.restore(0, read_version=0)
+
+
+def test_describe_snapshot(tmp_path: Path) -> None:
+    table = _create(tmp_path)
+    table.append(
+        [
+            {"id": 1, "region": "west", "year": 2024},
+            {"id": 2, "region": "east", "year": 2024},
+        ]
+    )
+    info = table.describe()
+    assert info["version"] == 1
+    assert info["files"] == 1
+    assert info["num_records"] == 2
+    assert info["schema"] == [
+        {"name": "id", "type": "int"},
+        {"name": "region", "type": "str"},
+        {"name": "year", "type": "int"},
+    ]
+    assert table.describe(version=0)["num_records"] == 0

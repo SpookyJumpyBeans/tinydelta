@@ -33,6 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("table")
     read.add_argument("--version", type=int, default=None)
 
+    describe = sub.add_parser("describe", help="print schema and snapshot stats")
+    describe.add_argument("table")
+    describe.add_argument("--version", type=int, default=None)
+
     history = sub.add_parser("history", help="print commits")
     history.add_argument("table")
 
@@ -68,6 +72,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "read":
             for row in table.read(args.version):
                 print(json.dumps(row, separators=(",", ":")))
+            return 0
+        if args.command == "describe":
+            info = table.describe(args.version)
+            print(f"version {info['version']}")
+            print(f"table_id {info['table_id']}")
+            print(f"files {info['files']}")
+            print(f"num_records {info['num_records']}")
+            for column in info["schema"]:
+                print(f"  {column['name']}:{column['type']}")
             return 0
         if args.command == "restore":
             version = table.restore(args.version)

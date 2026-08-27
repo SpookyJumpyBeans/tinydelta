@@ -88,6 +88,16 @@ class DeltaTable:
             rows.extend(_read_jsonl(self.path / file.path))
         return rows
 
+    def describe(self, version: int | None = None) -> dict[str, object]:
+        snapshot = self.snapshot(version)
+        return {
+            "version": snapshot.version,
+            "table_id": snapshot.table_id,
+            "schema": snapshot.schema.to_json(),
+            "files": len(snapshot.files),
+            "num_records": sum(file.num_records for file in snapshot.files),
+        }
+
     def history(self) -> list[Commit]:
         return load_history(self.log_dir)
 
