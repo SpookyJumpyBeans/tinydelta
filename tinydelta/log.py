@@ -4,6 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 
 from tinydelta.errors import ConcurrentWriteError, TinyDeltaError
 from tinydelta.schema import Schema
@@ -50,28 +51,70 @@ def list_versions(log_directory: Path) -> list[int]:
     return sorted(versions)
 
 
+TEMP_SUFFIX = ".tmp"
+
+
 def write_commit(log_directory: Path, version: int, actions: list[dict]) -> None:
+    """Publish a commit so it appears complete or not at all.
+
+    Two properties have to hold together:
+
+      * exclusivity: if two writers race for the same version, exactly one
+        wins and the other gets ConcurrentWriteError;
+      * atomic visibility: a reader that sees the version file sees all of it.
+
+    Creating the version file directly with O_EXCL gets the first but not the
+    second. The file exists, empty, between creating it and writing to it, and
+    a reader listing the log in that window treats an empty commit as the
+    latest version. Once the writer finishes, the same version number then
+    returns different data, so a version is no longer immutable once visible.
+
+    So the bytes go to a uniquely named temp file first, are flushed to disk,
+    and only then is the temp file hard-linked to the version name. link() is
+    atomic and fails if the target already exists, which keeps exclusivity,
+    and the version name can only ever appear pointing at complete contents.
+    Temp names do not match list_versions(), so readers never see them.
+    """
     path = version_path(log_directory, version)
     payload = "".join(json.dumps(action, separators=(",", ":")) + "\n" for action in actions)
-    data = payload.encode("utf-8")
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-    if hasattr(os, "O_BINARY"):
-        flags |= os.O_BINARY
+    temp = log_directory / f".{version:020d}.{uuid4().hex}{TEMP_SUFFIX}"
     try:
-        fd = os.open(path, flags, 0o644)
-    except FileExistsError as exc:
-        raise ConcurrentWriteError(version) from exc
-    try:
-        os.write(fd, data)
-        os.fsync(fd)
-    except Exception:
-        os.close(fd)
+        # A buffered file object writes every byte; a bare os.write may not.
+        with open(temp, "xb") as handle:
+            handle.write(payload.encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
         try:
-            path.unlink()
-        except OSError:
-            pass
-        raise
-    os.close(fd)
+            os.link(temp, path)
+        except FileExistsError as exc:
+            raise ConcurrentWriteError(version) from exc
+        _fsync_directory(log_directory)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Make the new directory entry durable, where the platform allows it.
+
+    On POSIX a crash after link() but before the directory is flushed can lose
+    the new name even though the file's bytes are on disk. Windows cannot open
+    a directory this way, and NTFS journals the entry anyway, so skip it there.
+    """
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def stale_temp_files(log_directory: Path) -> list[Path]:
+    """Temp files a crashed writer left behind; never part of any version."""
+    return sorted(log_directory.glob(f".*{TEMP_SUFFIX}"))
 
 
 def read_actions(log_directory: Path, version: int) -> list[dict]:

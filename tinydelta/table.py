@@ -14,6 +14,7 @@ from tinydelta.log import (
     load_history,
     load_snapshot,
     log_dir,
+    stale_temp_files,
     write_commit,
 )
 from tinydelta.schema import Schema, coerce_row
@@ -148,6 +149,15 @@ class DeltaTable:
                 continue
             path.unlink()
             deleted.append(path.name)
+
+        # A writer that crashed mid-commit can leave a temp file in the log.
+        # It was never linked to a version name, so nothing can reference it.
+        for path in stale_temp_files(self.log_dir):
+            age_ms = now_ms - path.stat().st_mtime * 1000
+            if age_ms < older_than_ms:
+                continue
+            path.unlink(missing_ok=True)
+            deleted.append(f"{self.log_dir.name}/{path.name}")
         return deleted
 
     def _base_snapshot(self, read_version: int | None) -> Snapshot:

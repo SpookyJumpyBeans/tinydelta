@@ -1,5 +1,7 @@
 # tinydelta
 
+[![tests](https://github.com/SpookyJumpyBeans/tinydelta/actions/workflows/tests.yml/badge.svg)](https://github.com/SpookyJumpyBeans/tinydelta/actions/workflows/tests.yml)
+
 Single-node table format. A directory of data files plus a JSON commit log. Readers only see files that a commit published.
 
 This is the same shape as Delta Lake (log as source of truth, atomic commit, time travel), on one machine, with JSONL instead of Parquet.
@@ -13,12 +15,13 @@ Sister of [tinyquery](https://github.com/SpookyJumpyBeans/tinyquery): that repo 
 - `read` the latest snapshot, or a past version
 - `describe` schema, file count, and row count for a version
 - Optimistic concurrency: two writers that both read version *n* cannot both commit *n+1*
+- Atomic visibility: a reader sees a commit completely or not at all, and a version never changes once visible
 - `vacuum` deletes data files the log never published (crash leftovers, lost writer files)
 - `restore` makes the latest snapshot match an older version, as a new commit
 
 ## What it does not do
 
-No Parquet, no checkpoints, no MERGE, no cloud object store. There is no retry loop; a conflict is an error. `vacuum` does not delete files that were `remove`d by overwrite — those still belong to older versions.
+No Parquet, no checkpoints, no MERGE, no cloud object store. There is no retry loop; a conflict is an error. Commits are published with a hard link, so the table must live on a filesystem that supports them (NTFS, ext4, APFS do; FAT32 does not). `vacuum` does not delete files that were `remove`d by overwrite — those still belong to older versions.
 
 ## Run
 
@@ -43,12 +46,19 @@ pytest
 
 ```text
 rows
-  → write part-<uuid>.jsonl  (not readable yet)
-  → create _delta_log/<version>.json with O_CREAT|O_EXCL
-  → fsync that file
+  → write part-<uuid>.jsonl                         (not readable yet)
+  → write the commit to _delta_log/.<version>.<uuid>.tmp, fsync it
+  → link the temp file to _delta_log/<version>.json  (the publish point)
+  → fsync the log directory, delete the temp name
 ```
 
-The commit file is the publish point. `os.open(..., O_CREAT|O_EXCL)` fails if that version already exists, so the second writer loses instead of overwriting the first. Data files are written first so a crash during the log create does not publish a half-written JSONL.
+A commit needs two properties at once. **Exclusivity**: if two writers race for the same version, exactly one wins. **Atomic visibility**: a reader that sees the version file sees all of it.
+
+An earlier version got only the first. It created `<version>.json` with `O_CREAT|O_EXCL` and then wrote into it, so for a moment the version existed but was empty. A reader in that window reported it as the latest version, and once the writer finished, the same version number returned different data. The window lasted microseconds, so random stress testing never caught it: a test that freezes the writer mid-write does.
+
+Linking fixes both at once. `link()` is atomic and fails if the target exists, so the losing writer still gets `ConcurrentWriteError`, and the version name can only ever point at complete, durable contents. Temp names don't match the version pattern, so readers never see them, and `vacuum` removes any a crashed writer left behind.
+
+Data files are written before the commit, so a crash anywhere before the link publishes nothing.
 
 A reader reconstructs a version by replaying `add` / `remove` from 0 to *n*. A JSONL sitting in the directory with no `add` action is garbage, not a row.
 
