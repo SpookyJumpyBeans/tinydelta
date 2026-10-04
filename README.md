@@ -8,6 +8,16 @@ This is the same shape as Delta Lake (log as source of truth, atomic commit, tim
 
 Sister of [tinyquery](https://github.com/SpookyJumpyBeans/tinyquery): that repo is the query engine, this one is the table format.
 
+**[Try it in your browser](https://spookyjumpybeans.github.io/tinyquery/)**: tinyquery
+queries a tinydelta table under Pyodide. Drag the timeline to read any version,
+or append a new one and watch it commit.
+
+[![The demo: a version timeline over a tinydelta table, with the query plan for the selected version](https://raw.githubusercontent.com/SpookyJumpyBeans/tinyquery/main/docs/demo.gif)](https://spookyjumpybeans.github.io/tinyquery/)
+
+Pyodide has no hard links, so the demo publishes commits with exclusive create
+plus copy instead. That only holds up because a browser tab runs one Python
+thread; everywhere else, tinydelta uses `link()` as described below.
+
 ## What works
 
 - `create` an empty table with a schema
