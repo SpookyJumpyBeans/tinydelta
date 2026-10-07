@@ -1,6 +1,8 @@
 # tinydelta
 
 [![tests](https://github.com/SpookyJumpyBeans/tinydelta/actions/workflows/tests.yml/badge.svg)](https://github.com/SpookyJumpyBeans/tinydelta/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![Pyodide](https://img.shields.io/badge/Pyodide-WebAssembly-654FF0)
 
 Single-node table format. A directory of data files plus a JSON commit log. Readers only see files that a commit published.
 
