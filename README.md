@@ -33,7 +33,7 @@ thread; everywhere else, tinydelta uses `link()` as described below.
 
 ## What it does not do
 
-No Parquet, no checkpoints, no MERGE, no cloud object store. There is no retry loop; a conflict is an error. Commits are published with a hard link, so the table must live on a filesystem that supports them (NTFS, ext4, APFS do; FAT32 does not). `vacuum` does not delete files that were `remove`d by overwrite — those still belong to older versions.
+No Parquet, no checkpoints, no MERGE, no cloud object store. There is no retry loop; a conflict is an error. Commits are published with a hard link, so the table must live on a filesystem that supports them (NTFS, ext4, APFS do; FAT32 does not). `vacuum` does not delete files that were `remove`d by overwrite, because those still belong to older versions.
 
 ## Run
 
